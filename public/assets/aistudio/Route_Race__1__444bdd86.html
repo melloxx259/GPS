@@ -1,0 +1,1224 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Route Race</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: full-bleed map with a floating directions sheet on the left, city chips on top, map controls bottom-right; typeset paper below. */
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --fg: #202124;
+  --muted: #5f6368;
+  --line: #dadce0;
+  --hover: #f1f3f4;
+  --accent: #1a73e8;
+  --accent-bg: #e8f0fe;
+  --ok: #188038;
+  --navgreen: #188038;
+  --land: #f1f0ec;
+  --park: #cfe8c8;
+  --water: #a9d3ef;
+  --road: #ffffff;
+  --road-edge: #cfd3d7;
+  --art-edge: #b9bec3;
+  --hwy: #fbe2a0;
+  --hwy-edge: #e3b24a;
+  --route: #1a73e8;
+  --route-edge: #0b57d0;
+  --jam: #d93025;
+  --slow: #f29900;
+  --free: #34a853;
+  --dij: #00897b;
+  --ast: #8e24aa;
+  --label: #5f6368;
+  --poi: #3c4043;
+  --shadow: 0 1px 3px rgba(60,64,67,.3), 0 2px 10px rgba(60,64,67,.18);
+  --sans: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --serif: "STIX Two Text", "Times New Roman", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171a1d; --surface: #292a2d; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --hover: #35363a;
+    --accent: #8ab4f8; --accent-bg: #2b3a55; --ok: #81c995; --navgreen: #137333;
+    --land: #242f3e; --park: #263c3f; --water: #17263c; --road: #38414e; --road-edge: #1f2835; --art-edge: #1b2330;
+    --hwy: #746855; --hwy-edge: #3a3326; --route: #8ab4f8; --route-edge: #1f4e9c; --jam: #f28b82; --slow: #fdd663; --free: #81c995;
+    --dij: #4db6ac; --ast: #ce93d8; --label: #9aa0a6; --poi: #c4c7ca;
+    --shadow: 0 1px 3px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171a1d; --surface: #292a2d; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --hover: #35363a;
+  --accent: #8ab4f8; --accent-bg: #2b3a55; --ok: #81c995; --navgreen: #137333;
+  --land: #242f3e; --park: #263c3f; --water: #17263c; --road: #38414e; --road-edge: #1f2835; --art-edge: #1b2330;
+  --hwy: #746855; --hwy-edge: #3a3326; --route: #8ab4f8; --route-edge: #1f4e9c; --jam: #f28b82; --slow: #fdd663; --free: #81c995;
+  --dij: #4db6ac; --ast: #ce93d8; --label: #9aa0a6; --poi: #c4c7ca;
+  --shadow: 0 1px 3px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.45); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ic { width: 24px; height: 24px; fill: currentColor; flex: none; }
+
+.app { position: relative; height: clamp(620px, 100svh, 1000px); overflow: hidden; background: var(--land); user-select: none; -webkit-user-select: none; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#map:active { cursor: grabbing; }
+
+.panel { position: absolute; z-index: 3; left: 12px; top: 12px; bottom: 12px; width: 380px; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.handle { display: none; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
+.search { position: relative; padding: 14px 12px 12px; border-bottom: 1px solid var(--line); }
+.fields { display: grid; grid-template-columns: 28px 1fr 40px; grid-template-rows: 40px 40px; gap: 8px 6px; align-items: center; }
+.fields .route-glyph { grid-row: 1 / span 2; width: 28px; height: 88px; }
+.fields input { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; background: var(--surface); font-size: 15px; }
+.fields input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.swap { grid-column: 3; grid-row: 1 / span 2; width: 40px; height: 40px; align-self: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: grid; place-items: center; }
+.swap:hover { background: var(--hover); }
+.sugg { position: absolute; z-index: 6; left: 46px; right: 52px; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); padding: 6px 0; max-height: 280px; overflow: auto; }
+.sugg button { width: 100%; display: flex; align-items: center; gap: 12px; border: 0; background: none; text-align: left; padding: 8px 14px; font-size: 14px; }
+.sugg button:hover { background: var(--hover); }
+.sugg .pi { width: 28px; height: 28px; border-radius: 50%; background: var(--hover); color: var(--muted); display: grid; place-items: center; }
+.sugg .pi .ic { width: 18px; height: 18px; }
+.sugg small { display: block; color: var(--muted); font-size: 12px; }
+.routes { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.route { width: 100%; display: grid; grid-template-columns: 20px 1fr; gap: 0 12px; text-align: left; border: 0; border-left: 4px solid transparent; background: none; padding: 12px 16px 12px 12px; }
+.route:hover { background: var(--hover); }
+.route[aria-checked="true"] { background: var(--accent-bg); border-left-color: var(--accent); }
+.route .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; justify-self: center; }
+.route .r1 { display: flex; align-items: baseline; gap: 8px; }
+.route .t { font-size: 20px; font-weight: 500; color: var(--ok); font-variant-numeric: tabular-nums; }
+.route .k { color: var(--muted); font-variant-numeric: tabular-nums; }
+.route .m { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.route .name { font-weight: 500; font-size: 13px; }
+.route .bar { height: 4px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.route .bar i { display: block; height: 100%; width: 0; border-radius: 2px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); font-weight: 500; }
+.pill:hover:not(:disabled) { background: var(--hover); }
+.pill.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding-left: 12px; }
+:root[data-theme="dark"] .pill.primary { color: #10203a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pill.primary { color: #10203a; } }
+.pill.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.pill:disabled { opacity: .45; cursor: default; }
+.pill .ic { width: 20px; height: 20px; }
+.cmp { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+.cmp input { width: 18px; height: 18px; accent-color: var(--accent); }
+.actions2 { display: flex; gap: 10px; padding: 0 14px 6px; }
+.explain { margin: 0; padding: 4px 16px 6px; font-size: 13px; line-height: 1.45; min-height: 4.4em; }
+.summary { padding: 0 16px 10px; color: var(--muted); font-size: 13px; min-height: 2.4em; }
+.steps { flex: 1; overflow: auto; border-top: 1px solid var(--line); }
+.steps h4 { margin: 0; padding: 12px 16px 4px; font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.step { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.step .ic { color: var(--muted); }
+.step .d { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.empty { padding: 18px 16px; color: var(--muted); }
+
+.chips { position: absolute; z-index: 3; top: 12px; left: 404px; right: 12px; display: flex; gap: 8px; overflow-x: auto; padding: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); font-weight: 400; }
+.chip:hover { background: var(--hover); }
+.chip[aria-pressed="true"] { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+.chip.math { margin-left: auto; color: var(--muted); }
+
+.ctrls { position: absolute; z-index: 3; right: 12px; bottom: calc(12px + var(--sheet-h, 0px)); display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.fab { width: 40px; height: 40px; border: 0; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); display: grid; place-items: center; color: var(--muted); }
+.fab:hover { background: var(--hover); }
+.zoom { display: flex; flex-direction: column; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); }
+.zoom .fab { box-shadow: none; background: none; border-radius: 8px; }
+.zoom .fab + .fab { border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; }
+.layers { position: absolute; z-index: 4; right: 60px; bottom: calc(12px + var(--sheet-h, 0px)); width: 230px; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.layers h5 { margin: 0 0 8px; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.tiles { display: flex; gap: 10px; }
+.tile { flex: 1; border: 2px solid transparent; border-radius: 10px; background: none; padding: 0; text-align: center; font-size: 12px; }
+.tile i { display: block; height: 46px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 4px; }
+.tile[aria-pressed="true"] { border-color: var(--accent); }
+.tile[aria-pressed="true"] span { color: var(--accent); font-weight: 500; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.row input[type="range"] { width: 100px; accent-color: var(--accent); }
+
+.nav-top { position: absolute; z-index: 5; left: 12px; top: 12px; right: 12px; max-width: 520px; display: none; align-items: center; gap: 16px; background: var(--navgreen); color: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 12px 18px; }
+.nav-top .ic { width: 48px; height: 48px; }
+.nav-top .nd { font-size: 32px; line-height: 1.1; font-weight: 500; font-variant-numeric: tabular-nums; }
+.nav-top .nt { font-size: 17px; opacity: .95; }
+.nav-bottom { position: absolute; z-index: 5; left: 12px; right: 64px; bottom: 12px; max-width: 520px; display: none; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 16px; }
+.nav-bottom b { font-size: 22px; font-weight: 500; color: var(--ok); font-variant-numeric: tabular-nums; }
+.nav-bottom .sub { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pill.danger { background: var(--jam); border-color: var(--jam); color: #fff; }
+:root[data-theme="dark"] .pill.danger { color: #3c0a06; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pill.danger { color: #3c0a06; } }
+.app.navigating .nav-top, .app.navigating .nav-bottom { display: flex; }
+.app.navigating .panel, .app.navigating .chips, .app.navigating .layers { display: none; }
+.app.navigating .ctrls { bottom: 92px; }
+
+@media (max-width: 760px) {
+  .panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 52%; border-radius: 16px 16px 0 0; overflow: auto; }
+  .handle { display: block; }
+  .steps { flex: none; overflow: visible; }
+  .chips { left: 12px; }
+  .layers { right: 12px; bottom: calc(12px + var(--sheet-h, 0px) + 98px); }
+  .app.navigating .layers { display: none; }
+}
+
+.mathsec { background: var(--bg); padding-block: 64px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+.paper { max-width: 720px; margin: 0 auto; font-family: var(--serif); font-size: 18px; line-height: 1.65; }
+.paper h2 { font: 500 24px var(--sans); margin: 0 0 6px; }
+.paper .byline { font: 400 13px var(--sans); color: var(--muted); margin-bottom: 28px; }
+.paper h3 { font: 500 17px var(--sans); margin: 34px 0 8px; }
+.paper p { margin: 0 0 12px; }
+.paper .stmt { margin: 14px 0; padding-left: 14px; border-left: 3px solid var(--line); }
+.paper b.lab { font-family: var(--serif); font-weight: 600; }
+.paper i.v { font-style: italic; }
+.paper mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; margin: 12px 0 !important; }
+.paper mjx-container { color: var(--fg); }
+.tex { font-family: var(--serif); font-style: italic; }
+.alg { margin: 18px 0; border-top: 2px solid var(--fg); border-bottom: 2px solid var(--fg); font-family: var(--serif); }
+.alg .t { padding: 6px 2px; font-size: 16px; border-bottom: 1px solid var(--fg); }
+.alg pre { margin: 0; padding: 10px 2px; font: 400 15.5px/1.7 var(--serif); overflow-x: auto; }
+.tblwrap { overflow-x: auto; margin: 14px 0; }
+table { border-collapse: collapse; width: 100%; font: 400 14px var(--sans); font-variant-numeric: tabular-nums; }
+caption { text-align: left; font: 400 14px var(--serif); padding-bottom: 6px; }
+thead th { border-top: 2px solid var(--fg); border-bottom: 1px solid var(--fg); font-weight: 500; text-align: right; padding: 6px 10px; white-space: nowrap; }
+tbody td { text-align: right; padding: 5px 10px; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 2px solid var(--fg); }
+th:first-child, td:first-child { text-align: left; }
+.fine { font: 400 13px/1.5 var(--sans); color: var(--muted); margin-top: 28px; }
+
+@media (max-width: 760px) { .paper { font-size: 17px; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></symbol>
+    <symbol id="i-nav" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></symbol>
+  </defs>
+</svg>
+
+<section class="app" id="app">
+  <canvas id="map" aria-label="Interactive road map"></canvas>
+
+  <div class="chips" id="chips" role="group" aria-label="City"></div>
+
+  <aside class="panel" id="panel">
+    <div class="handle"></div>
+    <div class="search" id="search">
+      <div class="fields">
+        <svg class="route-glyph" viewBox="0 0 28 88" aria-hidden="true">
+          <circle cx="14" cy="20" r="6" fill="none" stroke="#5f6368" stroke-width="2.4"/>
+          <circle cx="14" cy="38" r="1.7" fill="#9aa0a6"/><circle cx="14" cy="44" r="1.7" fill="#9aa0a6"/><circle cx="14" cy="50" r="1.7" fill="#9aa0a6"/>
+          <path transform="translate(2 56)" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" fill="#d93025"/>
+        </svg>
+        <input id="from" type="text" autocomplete="off" placeholder="Choose starting point" aria-label="Starting point">
+        <button class="swap" id="swap" type="button" aria-label="Swap start and destination"><svg class="ic"><use href="#i-swap"/></svg></button>
+        <input id="to" type="text" autocomplete="off" placeholder="Choose destination" aria-label="Destination">
+      </div>
+      <div class="sugg" id="sugg" hidden></div>
+    </div>
+
+    <div class="routes" role="radiogroup" aria-label="Algorithm">
+      <button class="route" type="button" role="radio" aria-checked="true" data-algo="ast">
+        <span class="dot" style="background:var(--ast)"></span>
+        <span><span class="r1"><span class="t" id="t-ast">…</span><span class="k" id="k-ast"></span></span>
+        <span class="name">A*</span><br><span class="m" id="m-ast">Searching</span>
+        <span class="bar"><i id="b-ast" style="background:var(--ast)"></i></span></span>
+      </button>
+      <button class="route" type="button" role="radio" aria-checked="false" data-algo="dij">
+        <span class="dot" style="background:var(--dij)"></span>
+        <span><span class="r1"><span class="t" id="t-dij">…</span><span class="k" id="k-dij"></span></span>
+        <span class="name">Dijkstra</span><br><span class="m" id="m-dij">Searching</span>
+        <span class="bar"><i id="b-dij" style="background:var(--dij)"></i></span></span>
+      </button>
+    </div>
+
+    <div class="actions">
+      <button class="pill primary" id="startbtn" type="button" disabled><svg class="ic"><use href="#i-nav"/></svg>Start</button>
+      <button class="pill" id="replay" type="button">Replay</button>
+      <label class="cmp" for="compare"><input type="checkbox" id="compare"> Compare</label>
+    </div>
+    <div class="actions2"><button class="pill" id="pauseBtn" type="button">Pause</button><button class="pill" id="stepBtn" type="button">Step</button></div>
+    <p class="explain" id="explain"></p>
+    <p class="summary" id="summary" aria-live="polite"></p>
+
+    <div class="steps" id="steps"></div>
+  </aside>
+
+  <div class="ctrls">
+    <button class="fab" id="layersBtn" type="button" aria-label="Map layers" aria-expanded="false"><svg class="ic"><use href="#i-layers"/></svg></button>
+    <button class="fab" id="locate" type="button" aria-label="Fit route"><svg class="ic"><use href="#i-locate"/></svg></button>
+    <div class="zoom">
+      <button class="fab" id="zin" type="button" aria-label="Zoom in"><svg class="ic"><use href="#i-plus"/></svg></button>
+      <button class="fab" id="zout" type="button" aria-label="Zoom out"><svg class="ic"><use href="#i-minus"/></svg></button>
+    </div>
+  </div>
+
+  <div class="layers" id="layers" hidden>
+    <div>
+      <h5>Map type</h5>
+      <div class="tiles">
+        <button class="tile" type="button" data-theme-set="light" aria-pressed="true"><i style="background:#f1f0ec"></i><span>Default</span></button>
+        <button class="tile" type="button" data-theme-set="dark" aria-pressed="false"><i style="background:#242f3e"></i><span>Night</span></button>
+      </div>
+    </div>
+    <div>
+      <h5>Map details</h5>
+      <label class="row" for="traffic"><span>Live traffic</span><input type="checkbox" id="traffic"></label>
+    </div>
+    <div>
+      <label class="row" for="speed"><span>Search speed</span><input type="range" id="speed" min="0" max="8" value="4"></label>
+    </div>
+  </div>
+
+  <div class="nav-top" id="navTop">
+    <svg class="ic" id="navIc"><use href="#i-up"/></svg>
+    <div><div class="nd" id="navDist"></div><div class="nt" id="navText"></div></div>
+  </div>
+  <div class="nav-bottom" id="navBottom">
+    <div><b id="navEta"></b><div class="sub" id="navSub"></div></div>
+    <button class="pill danger" id="navExit" type="button">Exit</button>
+  </div>
+</section>
+
+<section class="mathsec" id="math">
+<article class="paper">
+    <h2>Shortest paths on a road network</h2>
+    <p class="byline">Definitions, the two search rules, and a proof that A* returns the same route as Dijkstra</p>
+
+    <h3>1. Model</h3>
+    <p>Let \(G=(V,E)\) be a graph whose vertices are junctions and whose edges are road segments. Every vertex \(v\) has a position \(p(v)\in\mathbb{R}^2\) in kilometres. For a segment \((u,v)\in E\), let \(d(u,v)=\lVert p(u)-p(v)\rVert_2\) be its length and \(s(u,v)\in\{30,60,80\}\) its speed in km/h for local, arterial and highway roads. Live traffic multiplies travel time by a factor \(\tau(u,v)\ge 1\). The cost of a segment is its travel time in minutes:</p>
+    \[ w(u,v)=\frac{60\,d(u,v)}{s(u,v)}\,\tau(u,v) \tag{1} \]
+    <p>The cost of a path \(P=(v_0,v_1,\dots,v_k)\) is the sum of its segment costs, and \(\delta(s,v)\) denotes the least cost of any path from \(s\) to \(v\):</p>
+    \[ c(P)=\sum_{i=1}^{k} w(v_{i-1},v_i), \qquad \delta(s,v)=\min_{P:\,s\to v} c(P) \tag{2} \]
+    <p>Because \(w\ge 0\) on every segment, a cheapest path never repeats a vertex.</p>
+
+    <h3>2. Dijkstra's algorithm</h3>
+    <p>Maintain a tentative cost \(g(v)\) for every vertex, with \(g(s)=0\) and \(g(v)=\infty\) otherwise. Repeatedly remove the open vertex with the smallest tentative cost and relax its outgoing segments:</p>
+    \[ u=\operatorname*{arg\,min}_{v\in Q} g(v), \qquad g(v)\leftarrow \min\bigl\{\,g(v),\; g(u)+w(u,v)\,\bigr\} \tag{3} \]
+    <p class="stmt"><b class="lab">Invariant.</b> When \(u\) is removed from \(Q\), \(g(u)=\delta(s,u)\).</p>
+    <p>This holds because any other path to \(u\) must leave the settled set through a vertex whose tentative cost is at least \(g(u)\), and all remaining segments cost \(\ge 0\). After settling every vertex with \(\delta(s,v)\le r\), the search has covered the set of vertices reachable within travel time \(r\). On the map this is an isochrone that grows in all directions, including away from the destination.</p>
+
+    <h3>3. A* search</h3>
+    <p>A* uses the same loop but orders the queue by an estimate of the total cost through \(v\):</p>
+    \[ f(v)=g(v)+h(v) \tag{4} \]
+    <p>The heuristic \(h(v)\) estimates the remaining time to the target \(t\). Here it is the straight-line distance driven at the fastest speed any road allows, \(v_{\max}=80\) km/h:</p>
+    \[ h(v)=\frac{60\,\lVert p(v)-p(t)\rVert_2}{v_{\max}} \tag{5} \]
+    <p>For the result to be optimal, \(h\) must be admissible and, for each vertex to be settled only once, consistent:</p>
+    \[ h(v)\le \delta(v,t) \quad\text{(admissible)}, \qquad h(u)\le w(u,v)+h(v) \quad\text{(consistent)} \tag{6} \]
+    <p class="stmt"><b class="lab">Lemma 1.</b> The heuristic (5) is consistent, and \(h(t)=0\).</p>
+    <p><b class="lab">Proof.</b> By the triangle inequality, \(\lVert p(u)-p(t)\rVert \le \lVert p(u)-p(v)\rVert + \lVert p(v)-p(t)\rVert\). Multiplying by \(60/v_{\max}\) gives</p>
+    \[ h(u)\;\le\;\frac{60\,d(u,v)}{v_{\max}}+h(v)\;\le\;\frac{60\,d(u,v)}{s(u,v)}\,\tau(u,v)+h(v)\;=\;w(u,v)+h(v), \]
+    <p>since \(s(u,v)\le v_{\max}\) and \(\tau(u,v)\ge 1\). \(\blacksquare\)</p>
+    <p>Consistency implies admissibility, because summing the inequality along a cheapest path from \(v\) to \(t\) gives \(h(v)\le\delta(v,t)+h(t)=\delta(v,t)\).</p>
+
+    <p class="stmt"><b class="lab">Theorem 1.</b> With a consistent heuristic, A* returns a path of cost \(\delta(s,t)\), the same as Dijkstra, and settles each vertex at most once.</p>
+    <p><b class="lab">Proof.</b> Define reduced costs</p>
+    \[ w'(u,v)=w(u,v)+h(v)-h(u)\;\ge\;0. \tag{7} \]
+    <p>A* on \(w\) is exactly Dijkstra on \(w'\), because \(f(v)=g(v)+h(v)\) equals the reduced cost \(g'(v)\) of reaching \(v\), up to the constant \(h(s)\). For any path \(P\) from \(s\) to \(t\) the extra terms telescope:</p>
+    \[ c'(P)=\sum_{i=1}^{k}\bigl(w(v_{i-1},v_i)+h(v_i)-h(v_{i-1})\bigr)=c(P)+h(t)-h(s)=c(P)-h(s). \tag{8} \]
+    <p>Every path is shifted by the same constant, so the cheapest path under \(w'\) is the cheapest path under \(w\). Dijkstra's invariant on non-negative weights then gives the claim. \(\blacksquare\)</p>
+
+    <h3>4. Which vertices are searched</h3>
+    <p>Let \(C^{*}=\delta(s,t)\). Dijkstra settles every vertex with \(\delta(s,v)\le C^{*}\). A* settles only vertices whose estimate does not exceed the optimum, up to ties:</p>
+    \[ \mathcal{S}_{\text{A*}}\subseteq\{\,v:\ \delta(s,v)+h(v)\le C^{*}\,\}\;\subseteq\;\{\,v:\ \delta(s,v)\le C^{*}\,\}=\mathcal{S}_{\text{Dijkstra}} \tag{9} \]
+    <p>The second inclusion uses \(h\ge 0\). The better \(h\) approximates \(\delta(v,t)\), the smaller the first set. With \(h\equiv 0\) the two algorithms coincide.</p>
+
+    <div class="alg">
+      <div class="t"><b>Algorithm 1.</b> A* search. Dijkstra is the case \(h\equiv 0\).</div>
+<pre>input: graph G, source s, target t
+1   g(v) ← ∞ for all v;  g(s) ← 0;  Q ← { s with key h(s) }
+2   while Q is not empty
+3       u ← vertex in Q with the smallest key f
+4       if u = t then return the path ending at t, following parent pointers
+5       mark u settled
+6       for each segment (u, v) with v not settled
+7           if g(u) + w(u,v) &lt; g(v) then
+8               g(v) ← g(u) + w(u,v);  parent(v) ← u
+9               insert or update v in Q with key g(v) + h(v)
+10  return no route</pre>
+    </div>
+
+    <h3>5. Complexity</h3>
+    <p>With a binary heap, each segment causes at most one queue update and each update costs \(O(\log|V|)\), so both algorithms run in</p>
+    \[ O\bigl((|V|+|E|)\log|V|\bigr) \tag{10} \]
+    <p>in the worst case, using \(O(|V|)\) memory. A Fibonacci heap improves the bound to \(O(|E|+|V|\log|V|)\). The worst case does not change with \(h\); only the searched region (9) does. When traffic changes, \(\tau\) changes, the weights (1) change, and the search is simply run again on the new weights.</p>
+
+    <h3>6. Measured on these networks</h3>
+    <div class="tblwrap">
+      <table id="bench">
+        <caption>Table 1. Route from the first to the second listed place in each city, no traffic. Junctions settled before the target was reached.</caption>
+        <thead><tr><th>City</th><th>Junctions</th><th>Dijkstra</th><th>A*</th><th>Fewer</th><th>Trip (min)</th><th>Same cost</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="fine">The five networks are generated road grids shaped by each city's geography, such as rivers, harbours and street density. They are not real street data, and place names mark illustrative positions. Map styling follows common navigation-map conventions; no map data or imagery from any provider is used.</p>
+  </article>
+</section>
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']], tags: 'none' },
+  svg: { fontCache: 'none' },
+  options: { enableMenu: false }
+};
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script>
+<script>
+/*CORE-START*/
+const VMAX = 80;
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const CITIES = {
+  cairo:  { name: 'Cairo', seed: 11, cols: 34, rows: 24, sx: 0.42, sy: 0.42, jit: 0.14, remove: 0.12, art: 5, diag: 0,
+            barrier: { axis: 'v', at: 17, bridges: [3, 8, 14, 20], label: 'Nile' },
+            note: 'The Nile splits the city and only four bridges cross it. Watch both searches funnel toward them.' },
+  tokyo:  { name: 'Tokyo', seed: 7, cols: 40, rows: 26, sx: 0.3, sy: 0.3, jit: 0.2, remove: 0.18, art: 6, diag: 0,
+            barrier: { axis: 'v', at: 27, bridges: [2, 5, 8, 11, 14, 17, 20, 23], label: 'Sumida' },
+            note: 'A dense mesh of slow side streets with fast arterials. Many bridges, so the best route hops between highways.' },
+  newyork:{ name: 'New York', seed: 5, cols: 30, rows: 22, sx: 0.27, sy: 0.15, jit: 0.1, remove: 0.08, art: 5, diag: 0,
+            barrier: { axis: 'v', at: 22, bridges: [3, 9, 16], label: 'East River' },
+            note: 'Long rectangular blocks and a regular grid. A* barely strays from the straight line to the goal.' },
+  paris:  { name: 'Paris', seed: 21, cols: 34, rows: 26, sx: 0.3, sy: 0.3, jit: 0.16, remove: 0.14, art: 4, diag: 0.7,
+            barrier: { axis: 'h', at: 12, bridges: [2, 5, 8, 11, 14, 17, 20, 23, 26, 30], label: 'Seine' },
+            note: 'Diagonal avenues cut across the grid, and the Seine has many bridges. Shortcuts change which junctions matter.' },
+  sydney: { name: 'Sydney', seed: 33, cols: 34, rows: 24, sx: 0.36, sy: 0.36, jit: 0.15, remove: 0.13, art: 5, diag: 0,
+            barrier: { axis: 'h', at: 11, bridges: [18, 27], label: 'Harbour' },
+            note: 'The harbour leaves a bridge and a tunnel. Dijkstra floods the whole shore first; A* heads for the crossing.' }
+};
+
+function buildCity(key) {
+  const c = CITIES[key], rng = mulberry32(c.seed);
+  const cols = c.cols, rows = c.rows, N = cols * rows, A = c.art;
+  const nx = new Float64Array(N), ny = new Float64Array(N);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const n = j * cols + i;
+    nx[n] = i * c.sx + (rng() - 0.5) * 2 * c.jit * c.sx;
+    ny[n] = j * c.sy + (rng() - 0.5) * 2 * c.jit * c.sy;
+  }
+  const eu = [], ev = [], elen = [], espeed = [];
+  function crosses(i1, j1, i2, j2) {
+    const b = c.barrier;
+    if (!b) return 0;
+    if (b.axis === 'v') {
+      if ((i1 <= b.at) !== (i2 <= b.at)) return (j1 === j2 && b.bridges.includes(j1)) ? 1 : 2;
+    } else if ((j1 <= b.at) !== (j2 <= b.at)) {
+      return (i1 === i2 && b.bridges.includes(i1)) ? 1 : 2;
+    }
+    return 0;
+  }
+  function add(i1, j1, i2, j2, line, diag) {
+    const cr = crosses(i1, j1, i2, j2);
+    if (cr === 2) return;
+    let speed, keep = false;
+    if (cr === 1) { speed = 60; keep = true; }
+    else if (diag) { speed = 60; keep = true; }
+    else if (line % (2 * A) === 0) { speed = 80; keep = true; }
+    else if (line % A === 0) { speed = 60; keep = true; }
+    else speed = 30;
+    if (!keep && rng() < c.remove) return;
+    const a = j1 * cols + i1, b = j2 * cols + i2;
+    eu.push(a); ev.push(b);
+    elen.push(Math.hypot(nx[a] - nx[b], ny[a] - ny[b]));
+    espeed.push(speed);
+  }
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    if (i + 1 < cols) add(i, j, i + 1, j, j, false);
+    if (j + 1 < rows) add(i, j, i, j + 1, i, false);
+    if (c.diag && (i + j) % A === 0) {
+      if (i + 1 < cols && j + 1 < rows && rng() < c.diag) add(i, j, i + 1, j + 1, 0, true);
+      if (i + 1 < cols && j > 0 && rng() < c.diag) add(i, j, i + 1, j - 1, 0, true);
+    }
+  }
+  const E = eu.length, adj = Array.from({ length: N }, () => []);
+  for (let e = 0; e < E; e++) { adj[eu[e]].push(e); adj[ev[e]].push(e); }
+  // keep only the largest connected component
+  const comp = new Int32Array(N).fill(-1);
+  let best = -1, bestSize = 0, cid = 0;
+  for (let s = 0; s < N; s++) {
+    if (comp[s] !== -1) continue;
+    let size = 0; const stack = [s]; comp[s] = cid;
+    while (stack.length) {
+      const u = stack.pop(); size++;
+      for (const e of adj[u]) { const v = eu[e] ^ ev[e] ^ u; if (comp[v] === -1) { comp[v] = cid; stack.push(v); } }
+    }
+    if (size > bestSize) { bestSize = size; best = cid; }
+    cid++;
+  }
+  const alive = new Uint8Array(N);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, count = 0;
+  for (let n = 0; n < N; n++) if (comp[n] === best) {
+    alive[n] = 1; count++;
+    minX = Math.min(minX, nx[n]); maxX = Math.max(maxX, nx[n]);
+    minY = Math.min(minY, ny[n]); maxY = Math.max(maxY, ny[n]);
+  }
+  const G = { key, cfg: c, N, nx, ny, alive, count, adj, eu, ev, elen, espeed,
+              E, ew: new Float64Array(E), etau: new Float64Array(E).fill(1),
+              minX, maxX, minY, maxY };
+  setTraffic(G, false, 0);
+  return G;
+}
+
+function setTraffic(G, on, seed) {
+  const E = G.E;
+  G.etau.fill(1);
+  if (on) {
+    const rng = mulberry32(G.cfg.seed * 7919 + seed * 104729);
+    const alive = [];
+    for (let n = 0; n < G.N; n++) if (G.alive[n]) alive.push(n);
+    const zones = [];
+    for (let k = 0; k < 4; k++) {
+      const n = alive[Math.floor(rng() * alive.length)];
+      zones.push({ x: G.nx[n], y: G.ny[n], r: 1.2 + rng() * 1.6, f: 1.8 + rng() * 1.6 });
+    }
+    for (let e = 0; e < E; e++) {
+      const mx = (G.nx[G.eu[e]] + G.nx[G.ev[e]]) / 2, my = (G.ny[G.eu[e]] + G.ny[G.ev[e]]) / 2;
+      let tau = 1;
+      for (const z of zones) {
+        const d = Math.hypot(mx - z.x, my - z.y);
+        if (d < z.r) tau = Math.max(tau, 1 + (z.f - 1) * (1 - d / z.r));
+      }
+      G.etau[e] = tau;
+    }
+  }
+  for (let e = 0; e < E; e++) G.ew[e] = 60 * G.elen[e] / G.espeed[e] * G.etau[e];
+}
+
+class Heap {
+  constructor() { this.k = []; this.v = []; }
+  get size() { return this.k.length; }
+  push(key, val) {
+    const k = this.k, v = this.v; let i = k.length; k.push(key); v.push(val);
+    while (i > 0) { const p = (i - 1) >> 1; if (k[p] <= key) break; k[i] = k[p]; v[i] = v[p]; i = p; }
+    k[i] = key; v[i] = val;
+  }
+  pop() {
+    const k = this.k, v = this.v, top = v[0], lastK = k.pop(), lastV = v.pop(), n = k.length;
+    if (n > 0) {
+      let i = 0;
+      for (;;) {
+        let l = 2 * i + 1; if (l >= n) break;
+        const r = l + 1; if (r < n && k[r] < k[l]) l = r;
+        if (k[l] >= lastK) break;
+        k[i] = k[l]; v[i] = v[l]; i = l;
+      }
+      k[i] = lastK; v[i] = lastV;
+    }
+    return top;
+  }
+}
+
+class Runner {
+  constructor(G, s, t, useH) {
+    this.G = G; this.s = s; this.t = t; this.useH = useH;
+    this.g = new Float64Array(G.N).fill(Infinity);
+    this.parent = new Int32Array(G.N).fill(-1);
+    this.closed = new Uint8Array(G.N);
+    this.heap = new Heap();
+    this.expanded = 0; this.done = false; this.found = false;
+    this.path = []; this.cost = Infinity; this.km = 0; this.cur = -1; this.relaxed = []; this.revealN = 0;
+    this.g[s] = 0; this.heap.push(this.h(s), s);
+  }
+  h(n) {
+    if (!this.useH) return 0;
+    const G = this.G;
+    return 60 * Math.hypot(G.nx[n] - G.nx[this.t], G.ny[n] - G.ny[this.t]) / VMAX;
+  }
+  step() {
+    if (this.done) return;
+    const G = this.G, heap = this.heap, g = this.g, closed = this.closed;
+    while (heap.size) {
+      const u = heap.pop();
+      if (closed[u]) continue;
+      closed[u] = 1; this.expanded++; this.cur = u; this.relaxed = [];
+      if (u === this.t) { this.finish(); return; }
+      for (const e of G.adj[u]) {
+        const v = G.eu[e] ^ G.ev[e] ^ u;
+        if (closed[v]) continue;
+        const nd = g[u] + G.ew[e];
+        if (nd < g[v]) { g[v] = nd; this.parent[v] = u; this.relaxed.push(v); heap.push(nd + this.h(v), v); }
+      }
+      return;
+    }
+    this.done = true;
+  }
+  finish() {
+    this.done = true; this.found = true; this.cost = this.g[this.t];
+    const G = this.G; let n = this.t; const p = [];
+    while (n !== -1) { p.push(n); n = this.parent[n]; }
+    p.reverse(); this.path = p;
+    let km = 0;
+    for (let i = 1; i < p.length; i++) km += Math.hypot(G.nx[p[i]] - G.nx[p[i - 1]], G.ny[p[i]] - G.ny[p[i - 1]]);
+    this.km = km;
+  }
+}
+/*CORE-END*/
+
+/* ---------- places (illustrative positions as fractions of each network) ---------- */
+const PLACES = {
+  cairo: [
+    { n: 'Giza Pyramids', fx: 0.08, fy: 0.78 }, { n: 'Khan el-Khalili', fx: 0.78, fy: 0.3 },
+    { n: 'Cairo Tower', fx: 0.42, fy: 0.4 }, { n: 'Tahrir Square', fx: 0.62, fy: 0.5 },
+    { n: 'Citadel', fx: 0.84, fy: 0.58 }, { n: 'Airport', fx: 0.96, fy: 0.1 }, { n: 'Maadi', fx: 0.7, fy: 0.92 }
+  ],
+  tokyo: [
+    { n: 'Shinjuku', fx: 0.2, fy: 0.35 }, { n: 'Skytree', fx: 0.86, fy: 0.4 },
+    { n: 'Shibuya', fx: 0.18, fy: 0.72 }, { n: 'Tokyo Station', fx: 0.5, fy: 0.6 },
+    { n: 'Ueno', fx: 0.58, fy: 0.22 }, { n: 'Asakusa', fx: 0.66, fy: 0.32 }, { n: 'Haneda', fx: 0.45, fy: 0.96 }
+  ],
+  newyork: [
+    { n: 'Central Park', fx: 0.35, fy: 0.1 }, { n: 'Queens', fx: 0.92, fy: 0.55 },
+    { n: 'Midtown', fx: 0.4, fy: 0.42 }, { n: 'Wall Street', fx: 0.4, fy: 0.92 },
+    { n: 'Chelsea', fx: 0.12, fy: 0.55 }, { n: 'Brooklyn', fx: 0.9, fy: 0.9 }, { n: 'East Village', fx: 0.62, fy: 0.6 }
+  ],
+  paris: [
+    { n: 'Eiffel Tower', fx: 0.18, fy: 0.64 }, { n: 'Sacré-Cœur', fx: 0.58, fy: 0.08 },
+    { n: 'Louvre', fx: 0.45, fy: 0.38 }, { n: 'Notre-Dame', fx: 0.55, fy: 0.5 },
+    { n: 'Arc de Triomphe', fx: 0.2, fy: 0.3 }, { n: 'Montparnasse', fx: 0.4, fy: 0.82 }, { n: 'Gare de Lyon', fx: 0.82, fy: 0.64 }
+  ],
+  sydney: [
+    { n: 'Bondi', fx: 0.92, fy: 0.82 }, { n: 'Manly', fx: 0.86, fy: 0.1 },
+    { n: 'Opera House', fx: 0.62, fy: 0.55 }, { n: 'Chatswood', fx: 0.3, fy: 0.14 },
+    { n: 'Darling Harbour', fx: 0.38, fy: 0.58 }, { n: 'Central Station', fx: 0.45, fy: 0.74 }, { n: 'Airport', fx: 0.5, fy: 0.96 }
+  ]
+};
+
+/* ---------- state ---------- */
+const $ = (id) => document.getElementById(id);
+const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const app = $('app'), cv = $('map'), ctx = cv.getContext('2d'), panel = $('panel');
+const cache = {};
+let key = 'cairo', G = null, sel = 'ast', split = false, traffic = false, tSeed = 1;
+let fromN = -1, toN = -1, fromTxt = '', toTxt = '', active = 'to', placeNodes = [];
+let rD = null, rA = null, running = false, dirty = true, W = 0, H = 0, dpr = 1, lastSubs = [];
+const cam = { cx: 0, cy: 0, z: 1 }, tgt = { cx: 0, cy: 0, z: 1 };
+const nav = { on: false };
+let paused = false, stepReq = false, frameNo = 0;
+const userRng = mulberry32(2026);
+const PAD = 24;
+
+function getCity(k) { return cache[k] || (cache[k] = buildCity(k)); }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const selRunner = () => (sel === 'dij' ? rD : rA);
+
+/* ---------- geometry helpers ---------- */
+function nodeNearIn(g, fx, fy) {
+  let bestN = -1, bestD = Infinity;
+  const tx = g.minX + fx * (g.maxX - g.minX), ty = g.minY + fy * (g.maxY - g.minY);
+  for (let n = 0; n < g.N; n++) {
+    if (!g.alive[n]) continue;
+    const d = Math.hypot(g.nx[n] - tx, g.ny[n] - ty);
+    if (d < bestD) { bestD = d; bestN = n; }
+  }
+  return bestN;
+}
+function nearestNodeWorld(wx, wy) {
+  let bestN = -1, bestD = Infinity;
+  for (let n = 0; n < G.N; n++) {
+    if (!G.alive[n]) continue;
+    const d = Math.hypot(G.nx[n] - wx, G.ny[n] - wy);
+    if (d < bestD) { bestD = d; bestN = n; }
+  }
+  return bestN;
+}
+function labelFor(n) {
+  for (const p of placeNodes) if (Math.hypot(G.nx[p.node] - G.nx[n], G.ny[p.node] - G.ny[n]) < 0.45) return p.name;
+  return 'Dropped pin';
+}
+function fitScale(r) { return Math.min((r.w - 2 * PAD) / (G.maxX - G.minX), (r.h - 2 * PAD) / (G.maxY - G.minY)); }
+
+/* ---------- layout: where the map is visible ---------- */
+function insets() {
+  if (nav.on) return { l: 0, t: 100, r: 0, b: 90 };
+  if (W <= 760) return { l: 0, t: 60, r: 0, b: panel.offsetHeight + 8 };
+  return { l: panel.offsetWidth + 24, t: 60, r: 60, b: 0 };
+}
+function subviews() {
+  const i = insets(), x0 = i.l, y0 = i.t, w = W - i.l - i.r, h = H - i.t - i.b;
+  const full = { x: 0, y: 0, w: W, h: H };
+  if (split && !nav.on) {
+    if (w >= h * 1.1) {
+      const hw = Math.floor(w / 2);
+      return [
+        { k: 'dij', clip: { x: x0, y: y0, w: hw - 1, h }, r: { x: x0, y: y0, w: hw - 1, h } },
+        { k: 'ast', clip: { x: x0 + hw + 1, y: y0, w: hw - 1, h }, r: { x: x0 + hw + 1, y: y0, w: hw - 1, h } }
+      ];
+    }
+    const hh = Math.floor(h / 2);
+    return [
+      { k: 'dij', clip: { x: x0, y: y0, w, h: hh - 1 }, r: { x: x0, y: y0, w, h: hh - 1 } },
+      { k: 'ast', clip: { x: x0, y: y0 + hh + 1, w, h: hh - 1 }, r: { x: x0, y: y0 + hh + 1, w, h: hh - 1 } }
+    ];
+  }
+  return [{ k: sel, clip: full, r: { x: x0, y: y0, w, h } }];
+}
+function fitRoute(jump) {
+  if (fromN < 0 || toN < 0) return;
+  const xs = [G.nx[fromN], G.nx[toN]], ys = [G.ny[fromN], G.ny[toN]];
+  let bw = Math.max(Math.abs(xs[0] - xs[1]), 3) * 1.5, bh = Math.max(Math.abs(ys[0] - ys[1]), 2.2) * 1.5;
+  const r = subviews()[0].r, fit = fitScale(r);
+  const need = Math.min((r.w - 40) / bw, (r.h - 40) / bh);
+  tgt.z = clamp(need / fit, 0.9, 8); tgt.cx = (xs[0] + xs[1]) / 2; tgt.cy = (ys[0] + ys[1]) / 2;
+  if (jump) { cam.cx = tgt.cx; cam.cy = tgt.cy; cam.z = tgt.z; }
+  dirty = true;
+}
+
+/* ---------- route fields, places, suggestions ---------- */
+function setPoint(which, node, label, silent) {
+  const other = which === 'from' ? toN : fromN;
+  if (node === other) { $('from').value = fromTxt; $('to').value = toTxt; return; }
+  if (which === 'from') { fromN = node; fromTxt = label; $('from').value = label; }
+  else { toN = node; toTxt = label; $('to').value = label; }
+  if (!silent && fromN >= 0 && toN >= 0) startRace(true);
+}
+const sugg = $('sugg');
+function showSugg(which) {
+  const q = $(which).value.trim().toLowerCase();
+  sugg.textContent = '';
+  const items = placeNodes.filter((p) => !q || p.name.toLowerCase().includes(q) || q === fromTxt.toLowerCase() || q === toTxt.toLowerCase());
+  if (!items.length) { sugg.hidden = true; return; }
+  items.forEach((p) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.innerHTML = '<span class="pi"><svg class="ic"><use href="#i-pin"/></svg></span><span></span>';
+    const s = b.querySelector('span:last-child'); s.textContent = p.name;
+    const sm = document.createElement('small'); sm.textContent = CITIES[key].name; s.appendChild(sm);
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', () => { setPoint(which, p.node, p.name); sugg.hidden = true; $(which).blur(); });
+    sugg.appendChild(b);
+  });
+  sugg.style.top = ($(which).offsetTop + $(which).offsetHeight + 4) + 'px';
+  sugg.hidden = false;
+}
+['from', 'to'].forEach((which) => {
+  const el = $(which);
+  el.addEventListener('focus', () => { active = which; el.select(); showSugg(which); });
+  el.addEventListener('input', () => showSugg(which));
+  el.addEventListener('blur', () => { setTimeout(() => { sugg.hidden = true; el.value = which === 'from' ? fromTxt : toTxt; }, 120); });
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') el.blur(); });
+});
+$('swap').addEventListener('click', () => {
+  [fromN, toN] = [toN, fromN]; [fromTxt, toTxt] = [toTxt, fromTxt];
+  $('from').value = fromTxt; $('to').value = toTxt; startRace(true);
+});
+
+/* ---------- directions ---------- */
+function roadName(a, b) {
+  const c = G.cfg, cols = c.cols, br = c.barrier, A = c.art;
+  const ia = a % cols, ja = (a / cols) | 0, ib = b % cols, jb = (b / cols) | 0;
+  if (br) {
+    const crossV = br.axis === 'v' && ((ia <= br.at) !== (ib <= br.at));
+    const crossH = br.axis === 'h' && ((ja <= br.at) !== (jb <= br.at));
+    if (crossV || crossH) return br.label + ' Bridge';
+  }
+  if (ja === jb) {
+    if (ja % (2 * A) === 0) return 'Highway H' + (ja / (2 * A) + 1);
+    if (ja % A === 0) return 'Grand Avenue ' + (ja / A);
+    return 'Avenue ' + (ja + 1);
+  }
+  if (ia === ib) {
+    if (ia % (2 * A) === 0) return 'Highway V' + (ia / (2 * A) + 1);
+    if (ia % A === 0) return 'Boulevard ' + (ia / A);
+    return 'Street ' + (ia + 1);
+  }
+  return 'Diagonal Avenue';
+}
+function edgeBetween(a, b) {
+  let best = -1, bw = Infinity;
+  for (const e of G.adj[a]) if ((G.eu[e] ^ G.ev[e] ^ a) === b && G.ew[e] < bw) { bw = G.ew[e]; best = e; }
+  return best;
+}
+const COMPASS = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+const compass = (ang) => COMPASS[Math.round(((ang + 360) % 360) / 45) % 8];
+function fmtDist(km) { return km < 1 ? (Math.max(10, Math.round(km * 100) * 10)) + ' m' : km.toFixed(1) + ' km'; }
+function turnText(s) {
+  if (s.arrive) return 'Arrive at destination';
+  if (s.turn === null) return 'Head ' + compass(s.head) + ' on ' + s.name;
+  const a = Math.abs(s.turn), side = s.turn > 0 ? 'right' : 'left';
+  if (a < 28) return 'Continue onto ' + s.name;
+  if (a > 150) return 'Make a U-turn onto ' + s.name;
+  const kind = a < 60 ? 'Bear ' + side : a > 120 ? 'Sharp ' + side : 'Turn ' + side;
+  return kind + ' onto ' + s.name;
+}
+function stepsFor(r) {
+  if (r.steps) return r.steps;
+  const p = r.path, n = p.length, cumD = [0], cumC = [0], angs = [], names = [];
+  for (let i = 1; i < n; i++) {
+    const a = p[i - 1], b = p[i], dx = G.nx[b] - G.nx[a], dy = G.ny[b] - G.ny[a];
+    cumD.push(cumD[i - 1] + Math.hypot(dx, dy));
+    cumC.push(cumC[i - 1] + G.ew[edgeBetween(a, b)]);
+    angs.push(Math.atan2(dy, dx) * 180 / Math.PI); names.push(roadName(a, b));
+  }
+  const steps = []; let cur = null;
+  for (let i = 0; i < n - 1; i++) {
+    if (!cur) { cur = { i0: i, name: names[i], turn: null, head: angs[i] }; steps.push(cur); continue; }
+    let d = angs[i] - angs[i - 1]; while (d > 180) d -= 360; while (d < -180) d += 360;
+    if (Math.abs(d) < 28 && names[i] === cur.name) continue;
+    cur = { i0: i, name: names[i], turn: d, head: angs[i] }; steps.push(cur);
+  }
+  steps.forEach((s, k) => {
+    const end = k + 1 < steps.length ? steps[k + 1].i0 : n - 1;
+    s.d0 = cumD[s.i0]; s.d1 = cumD[end]; s.km = s.d1 - s.d0; s.text = turnText(s);
+    s.rot = s.turn === null ? s.head + 90 : s.turn;
+  });
+  steps.push({ i0: n - 1, arrive: true, d0: cumD[n - 1], d1: cumD[n - 1], km: 0, text: 'Arrive at destination', rot: 0 });
+  r.cumD = cumD; r.cumC = cumC; r.angs = angs; r.steps = steps;
+  return steps;
+}
+function renderSteps() {
+  const el = $('steps'), r = selRunner(); el.textContent = '';
+  if (!r || !r.found) {
+    const d = document.createElement('div'); d.className = 'empty';
+    d.textContent = r && r.done ? 'No route found.' : 'Searching for the fastest route…';
+    el.appendChild(d); return;
+  }
+  const h = document.createElement('h4'); h.textContent = 'Directions'; el.appendChild(h);
+  stepsFor(r).forEach((s) => {
+    const row = document.createElement('div'); row.className = 'step';
+    row.innerHTML = '<svg class="ic"><use href="' + (s.arrive ? '#i-pin' : '#i-up') + '"/></svg><span></span><span class="d"></span>';
+    const svg = row.querySelector('svg'); if (!s.arrive) svg.style.transform = 'rotate(' + s.rot + 'deg)';
+    row.children[1].textContent = s.text; row.children[2].textContent = s.arrive ? '' : fmtDist(s.km);
+    el.appendChild(row);
+  });
+}
+
+/* ---------- race control ---------- */
+function resetCards() {
+  for (const k of ['dij', 'ast']) {
+    $('t-' + k).textContent = '…'; $('k-' + k).textContent = ''; $('b-' + k).style.width = '0';
+    $('m-' + k).textContent = 'Searching';
+  }
+  $('startbtn').disabled = true;
+}
+function startRace(refit) {
+  if (nav.on) exitNav(true);
+  rD = new Runner(G, fromN, toN, false);
+  rA = new Runner(G, fromN, toN, true);
+  running = true; dirty = true; paused = false; $('pauseBtn').textContent = 'Pause';
+  $('summary').textContent = ''; resetCards(); renderSteps(); explain();
+  if (refit) fitRoute(false);
+  if (reduced) { while (!rD.done) rD.step(); while (!rA.done) rA.step(); rD.revealN = rD.path.length; rA.revealN = rA.path.length; running = false; finalize(); }
+}
+function updateCards() {
+  for (const k of ['dij', 'ast']) {
+    const r = k === 'dij' ? rD : rA; if (!r) continue;
+    $('b-' + k).style.width = Math.min(100, Math.round(100 * r.expanded / G.count)) + '%';
+    if (r.found) {
+      $('t-' + k).textContent = (r.cost < 10 ? r.cost.toFixed(1) : Math.round(r.cost)) + ' min';
+      $('k-' + k).textContent = '(' + r.km.toFixed(1) + ' km)';
+    }
+    $('m-' + k).textContent = (r.done ? 'Searched ' : 'Searching ') + r.expanded.toLocaleString() + ' junctions · ' + Math.round(100 * r.expanded / G.count) + '% of the network';
+  }
+}
+function explain() {
+  const r = selRunner(), el = $('explain'); if (!r) { el.textContent = ''; return; }
+  const name = sel === 'ast' ? 'A*' : 'Dijkstra';
+  if (r.found) { el.textContent = name + ' reached the destination at ' + r.cost.toFixed(1) + ' min. Each junction remembers the one it was reached from, so following those links back from the destination draws the fastest route.'; return; }
+  if (r.cur < 0) { el.textContent = 'Starting at the origin with a travel time of 0 min.'; return; }
+  const g = r.g[r.cur], n = r.relaxed.length;
+  const tail = ' Checked its roads and found a faster way to ' + n + ' neighbouring junction' + (n === 1 ? '' : 's') + '.';
+  if (sel === 'ast') { const h = r.h(r.cur); el.textContent = 'Step ' + r.expanded + '. Picked the open junction with the lowest g + h = ' + g.toFixed(1) + ' + ' + h.toFixed(1) + ' = ' + (g + h).toFixed(1) + ' min (travelled so far plus straight-line estimate left).' + tail; }
+  else el.textContent = 'Step ' + r.expanded + '. Picked the open junction with the lowest travel time so far, g = ' + g.toFixed(1) + ' min.' + tail;
+}
+function finalize() {
+  updateCards(); explain();
+  if (!rD.found || !rA.found) { $('summary').textContent = 'No route found between these points.'; renderSteps(); return; }
+  const same = Math.abs(rD.cost - rA.cost) < 1e-9, saved = Math.round(100 * (1 - rA.expanded / rD.expanded));
+  $('summary').textContent = 'Both algorithms found ' + (same ? 'a route of identical cost' : 'a route') + '. A* searched ' +
+    (saved > 0 ? saved + '% fewer junctions than Dijkstra.' : 'as many junctions as Dijkstra.');
+  $('startbtn').disabled = false; renderSteps();
+}
+function loadCity(k) {
+  key = k; G = getCity(k); setTraffic(G, traffic, tSeed);
+  placeNodes = PLACES[k].map((p) => ({ name: p.n, node: nodeNearIn(G, p.fx, p.fy) }));
+  fromN = toN = -1;
+  setPoint('from', placeNodes[0].node, placeNodes[0].name, true);
+  setPoint('to', placeNodes[1].node, placeNodes[1].name, true);
+  document.querySelectorAll('#chips .chip[data-key]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.key === k)));
+  startRace(false); fitRoute(true);
+}
+function randomPair() {
+  const alive = []; for (let n = 0; n < G.N; n++) if (G.alive[n]) alive.push(n);
+  const diag = Math.hypot(G.maxX - G.minX, G.maxY - G.minY);
+  let a = alive[0], b = alive[1];
+  for (let k = 0; k < 300; k++) {
+    a = alive[Math.floor(userRng() * alive.length)]; b = alive[Math.floor(userRng() * alive.length)];
+    if (Math.hypot(G.nx[a] - G.nx[b], G.ny[a] - G.ny[b]) > 0.5 * diag) break;
+  }
+  return [a, b];
+}
+
+/* ---------- navigation mode ---------- */
+function startNav() {
+  const r = selRunner(); if (!r || !r.found) return;
+  stepsFor(r);
+  Object.assign(nav, { on: true, r, t: 0, seg: 0, total: r.cost, dur: clamp(r.km * 2.4, 14, 28), arrived: false, x: G.nx[r.path[0]], y: G.ny[r.path[0]], head: r.angs[0], d: 0 });
+  split = false; $('compare').checked = false; sugg.hidden = true;
+  app.classList.add('navigating');
+  tgt.z = 5; tgt.cx = nav.x; tgt.cy = nav.y; dirty = true; navUpdate(0);
+}
+function exitNav(silent) {
+  nav.on = false; app.classList.remove('navigating'); if (!silent) fitRoute(false); dirty = true;
+}
+function navUpdate(dt) {
+  const r = nav.r, c = r.cumC;
+  if (!nav.arrived) {
+    nav.t += dt / nav.dur * nav.total;
+    if (nav.t >= nav.total) { nav.t = nav.total; nav.arrived = true; }
+  }
+  while (nav.seg < c.length - 2 && c[nav.seg + 1] <= nav.t) nav.seg++;
+  const i = nav.seg, span = c[i + 1] - c[i], f = span > 0 ? clamp((nav.t - c[i]) / span, 0, 1) : 1;
+  const a = r.path[i], b = r.path[i + 1];
+  nav.x = G.nx[a] + (G.nx[b] - G.nx[a]) * f; nav.y = G.ny[a] + (G.ny[b] - G.ny[a]) * f;
+  nav.head = r.angs[i]; nav.d = r.cumD[i] + (r.cumD[i + 1] - r.cumD[i]) * f;
+  tgt.cx = nav.x; tgt.cy = nav.y;
+  const steps = r.steps; let s = 0;
+  while (s + 1 < steps.length - 1 && steps[s + 1].d0 <= nav.d + 1e-9) s++;
+  const next = steps[s + 1] || steps[steps.length - 1];
+  const icon = $('navIc'); const use = icon.firstElementChild;
+  if (nav.arrived) {
+    use.setAttribute('href', '#i-pin'); icon.style.transform = '';
+    $('navDist').textContent = 'Arrived'; $('navText').textContent = 'You have reached your destination';
+  } else {
+    use.setAttribute('href', next.arrive ? '#i-pin' : '#i-up'); icon.style.transform = next.arrive ? '' : 'rotate(' + next.rot + 'deg)';
+    $('navDist').textContent = fmtDist(Math.max(0.01, next.d0 - nav.d));
+    $('navText').textContent = next.text;
+  }
+  const remMin = Math.max(0, nav.total - nav.t), remKm = Math.max(0, r.cumD[r.cumD.length - 1] - nav.d);
+  const arr = new Date(Date.now() + remMin * 60000);
+  $('navEta').textContent = Math.ceil(remMin) + ' min';
+  $('navSub').textContent = remKm.toFixed(1) + ' km · ' + arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  dirty = true;
+}
+
+/* ---------- drawing ---------- */
+function colors() {
+  const cs = getComputedStyle(document.documentElement), g = (n) => cs.getPropertyValue('--' + n).trim(), o = {};
+  ['land', 'park', 'water', 'road', 'road-edge', 'art-edge', 'hwy', 'hwy-edge', 'route', 'route-edge', 'jam', 'slow', 'free', 'dij', 'ast', 'label', 'poi', 'surface', 'fg']
+    .forEach((n) => { o[n] = g(n); });
+  return o;
+}
+function parksFor() {
+  if (G.parks) return G.parks;
+  const c = G.cfg, rng = mulberry32(c.seed + 5), p = new Uint8Array(c.cols * c.rows);
+  for (let k = 0; k < p.length; k++) p[k] = rng() < 0.07 ? 1 : 0;
+  return (G.parks = p);
+}
+function rr(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawSub(sub, col) {
+  const { clip, r, k } = sub, c = G.cfg;
+  const sc = fitScale(r) * cam.z, cx0 = r.x + r.w / 2, cy0 = r.y + r.h / 2;
+  const X = (x) => cx0 + (x - cam.cx) * sc, Y = (y) => cy0 + (y - cam.cy) * sc;
+  sub.tf = { cx0, cy0, sc };
+  const lw = clamp(sc / 55, 0.8, 3.4);
+  ctx.save(); ctx.beginPath(); ctx.rect(clip.x, clip.y, clip.w, clip.h); ctx.clip();
+  ctx.fillStyle = col.land; ctx.fillRect(clip.x, clip.y, clip.w, clip.h);
+  // parks
+  const parks = parksFor(), br = c.barrier; ctx.fillStyle = col.park;
+  for (let j = 0; j < c.rows - 1; j++) for (let i = 0; i < c.cols - 1; i++) {
+    if (!parks[j * c.cols + i]) continue;
+    if (br && ((br.axis === 'v' && i === br.at) || (br.axis === 'h' && j === br.at))) continue;
+    const a0 = j * c.cols + i, a1 = a0 + 1, a2 = a0 + c.cols + 1, a3 = a0 + c.cols;
+    ctx.beginPath(); ctx.moveTo(X(G.nx[a0]), Y(G.ny[a0])); ctx.lineTo(X(G.nx[a1]), Y(G.ny[a1]));
+    ctx.lineTo(X(G.nx[a2]), Y(G.ny[a2])); ctx.lineTo(X(G.nx[a3]), Y(G.ny[a3])); ctx.closePath(); ctx.fill();
+  }
+  // water
+  if (br) {
+    ctx.fillStyle = col.water;
+    ctx.font = 'italic 13px "STIX Two Text", Georgia, serif';
+    if (br.axis === 'v') {
+      const cx = X((br.at + 0.5) * c.sx), hw = 0.2 * c.sx * sc;
+      ctx.fillRect(cx - hw, clip.y, hw * 2, clip.h);
+      ctx.fillStyle = col.label; ctx.fillText(br.label, cx + hw + 6, clip.y + clip.h - 14);
+    } else {
+      const cy = Y((br.at + 0.5) * c.sy), hh = 0.2 * c.sy * sc;
+      ctx.fillRect(clip.x, cy - hh, clip.w, hh * 2);
+      ctx.fillStyle = col.label; ctx.fillText(br.label, clip.x + clip.w - 70, cy - hh - 6);
+    }
+  }
+  // roads
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const classes = [
+    { sp: 30, edge: col['road-edge'], fill: col.road, we: 2.8, wf: 1.7 },
+    { sp: 60, edge: col['art-edge'], fill: col.road, we: 4.2, wf: 2.9 },
+    { sp: 80, edge: col['hwy-edge'], fill: col.hwy, we: 5.4, wf: 3.9 }
+  ];
+  for (const pass of ['edge', 'fill']) for (const kcl of classes) {
+    ctx.strokeStyle = pass === 'edge' ? kcl.edge : kcl.fill; ctx.lineWidth = lw * (pass === 'edge' ? kcl.we : kcl.wf); ctx.beginPath();
+    for (let e = 0; e < G.E; e++) {
+      if (G.espeed[e] !== kcl.sp) continue;
+      ctx.moveTo(X(G.nx[G.eu[e]]), Y(G.ny[G.eu[e]])); ctx.lineTo(X(G.nx[G.ev[e]]), Y(G.ny[G.ev[e]]));
+    }
+    ctx.stroke();
+  }
+  // live traffic
+  if (traffic) {
+    ctx.strokeStyle = col.free; ctx.lineWidth = lw * 2; ctx.beginPath();
+    for (let e = 0; e < G.E; e++) {
+      if (G.espeed[e] < 60 || G.etau[e] > 1.12) continue;
+      ctx.moveTo(X(G.nx[G.eu[e]]), Y(G.ny[G.eu[e]])); ctx.lineTo(X(G.nx[G.ev[e]]), Y(G.ny[G.ev[e]]));
+    }
+    ctx.stroke();
+    for (let e = 0; e < G.E; e++) {
+      const tau = G.etau[e]; if (tau <= 1.12) continue;
+      ctx.strokeStyle = tau > 1.8 ? col.jam : col.slow; ctx.lineWidth = lw * 2.6;
+      ctx.beginPath(); ctx.moveTo(X(G.nx[G.eu[e]]), Y(G.ny[G.eu[e]])); ctx.lineTo(X(G.nx[G.ev[e]]), Y(G.ny[G.ev[e]])); ctx.stroke();
+    }
+  }
+  const run = k === 'dij' ? rD : rA;
+  if (run && !nav.on) {
+    const sc2 = col[k];
+    ctx.strokeStyle = sc2; ctx.lineWidth = lw * 2.2; ctx.globalAlpha = 0.85; ctx.beginPath();
+    for (let n = 0; n < G.N; n++) {
+      if (!run.closed[n] || run.parent[n] < 0) continue;
+      ctx.moveTo(X(G.nx[run.parent[n]]), Y(G.ny[run.parent[n]])); ctx.lineTo(X(G.nx[n]), Y(G.ny[n]));
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    if (!run.done) {
+      ctx.fillStyle = sc2;
+      for (let n = 0; n < G.N; n++) {
+        if (run.closed[n] || run.g[n] === Infinity) continue;
+        ctx.beginPath(); ctx.arc(X(G.nx[n]), Y(G.ny[n]), lw * 2.6, 0, 6.2832); ctx.fill();
+      }
+    }
+  }
+  if (run && !nav.on && !run.done && run.cur >= 0) {
+    const cu = run.cur, x = X(G.nx[cu]), y = Y(G.ny[cu]);
+    if (k === 'ast') {
+      ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = col[k]; ctx.globalAlpha = 0.7; ctx.lineWidth = lw * 1.6;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(X(G.nx[toN]), Y(G.ny[toN])); ctx.stroke(); ctx.restore();
+    }
+    ctx.strokeStyle = col.fg; ctx.lineWidth = lw * 3.2; ctx.beginPath();
+    for (const v of run.relaxed) { ctx.moveTo(x, y); ctx.lineTo(X(G.nx[v]), Y(G.ny[v])); }
+    ctx.stroke(); ctx.fillStyle = col.fg;
+    for (const v of run.relaxed) { ctx.beginPath(); ctx.arc(X(G.nx[v]), Y(G.ny[v]), lw * 3.6, 0, 6.2832); ctx.fill(); }
+    ctx.fillStyle = col.surface; ctx.beginPath(); ctx.arc(x, y, lw * 7, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = col[k]; ctx.lineWidth = 3.5; ctx.stroke();
+    const g = run.g[cu], txt = k === 'ast' ? 'g ' + g.toFixed(1) + ' + h ' + run.h(cu).toFixed(1) + ' = ' + (g + run.h(cu)).toFixed(1) : 'g = ' + g.toFixed(1) + ' min';
+    ctx.font = '500 12px Roboto, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width + 16, bx = x - tw / 2, by = y - lw * 7 - 28;
+    ctx.fillStyle = col.surface; rr(bx, by, tw, 22, 11); ctx.fill(); ctx.strokeStyle = col[k]; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = col.fg; ctx.fillText(txt, bx + 8, by + 11.5);
+  }
+  if (run && run.found && (nav.on || run.revealN > 0)) {
+    const pp = nav.on ? run.path : run.path.slice(run.path.length - run.revealN);
+    for (const [style, wd] of [[col['route-edge'], 8.5], [col.route, 6]]) {
+      ctx.strokeStyle = style; ctx.lineWidth = lw * wd; ctx.beginPath();
+      pp.forEach((n, i) => (i ? ctx.lineTo(X(G.nx[n]), Y(G.ny[n])) : ctx.moveTo(X(G.nx[n]), Y(G.ny[n]))));
+      ctx.stroke();
+    }
+  }
+  // place labels
+  ctx.font = '500 12px Roboto, system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const p of placeNodes) {
+    if (p.node === fromN || p.node === toN) continue;
+    const x = X(G.nx[p.node]), y = Y(G.ny[p.node]);
+    if (x < clip.x - 40 || x > clip.x + clip.w + 40 || y < clip.y - 20 || y > clip.y + clip.h + 20) continue;
+    ctx.fillStyle = col.surface; ctx.strokeStyle = col.label; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = col.land; ctx.strokeText(p.name, x + 9, y);
+    ctx.fillStyle = col.poi; ctx.fillText(p.name, x + 9, y);
+  }
+  // origin and destination
+  if (fromN >= 0) {
+    const x = X(G.nx[fromN]), y = Y(G.ny[fromN]);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = col.route; ctx.lineWidth = 3.4; ctx.stroke();
+  }
+  if (toN >= 0) {
+    const x = X(G.nx[toN]), y = Y(G.ny[toN]);
+    ctx.fillStyle = '#d93025'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.arc(x, y - 18, 10, Math.PI * 0.78, Math.PI * 0.22, false); ctx.lineTo(x, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - 18, 3.8, 0, 6.2832); ctx.fill();
+  }
+  // vehicle
+  if (nav.on) {
+    const x = X(nav.x), y = Y(nav.y);
+    ctx.save(); ctx.translate(x, y); ctx.rotate((nav.head + 90) * Math.PI / 180);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 15, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = col.route; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(6, 6); ctx.lineTo(0, 3); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // split label
+  if (split && !nav.on) {
+    const name = k === 'dij' ? 'Dijkstra' : 'A*', rn = k === 'dij' ? rD : rA;
+    const txt = name + (rn ? ' · ' + rn.expanded.toLocaleString() + ' searched' : '');
+    ctx.font = '500 13px Roboto, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width + 34;
+    ctx.fillStyle = col.surface; rr(clip.x + 10, clip.y + 10, tw, 30, 15); ctx.fill();
+    ctx.fillStyle = col[k]; ctx.beginPath(); ctx.arc(clip.x + 25, clip.y + 25, 5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = col.fg; ctx.fillText(txt, clip.x + 36, clip.y + 25.5);
+  }
+  ctx.restore();
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const col = colors();
+  ctx.fillStyle = col.land; ctx.fillRect(0, 0, W, H);
+  lastSubs = subviews();
+  for (const s of lastSubs) drawSub(s, col);
+}
+function resizeCanvas() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2); W = app.clientWidth; H = app.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  app.style.setProperty('--sheet-h', W <= 760 ? panel.offsetHeight + 'px' : '0px');
+  dirty = true;
+}
+
+/* ---------- frame loop ---------- */
+let lastTs = 0;
+function frame(ts) {
+  const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0); lastTs = ts;
+  frameNo++;
+  let stepsNow = 0;
+  if (running && !paused) { const v = +$('speed').value; stepsNow = v === 0 ? (frameNo % 6 === 0 ? 1 : 0) : Math.round(Math.pow(1.75, v)); }
+  if (stepReq) { stepsNow = 1; stepReq = false; }
+  if (running && stepsNow) {
+    for (let k = 0; k < stepsNow; k++) { if (!rD.done) rD.step(); if (!rA.done) rA.step(); }
+    if (rD.done && rA.done) { running = false; finalize(); } else { updateCards(); explain(); }
+    dirty = true;
+  }
+  for (const rn of [rD, rA]) {
+    if (rn && rn.found && rn.revealN < rn.path.length) { rn.revealN = Math.min(rn.path.length, rn.revealN + Math.max(1, Math.ceil(rn.path.length / 50))); dirty = true; }
+  }
+  if (nav.on) navUpdate(dt);
+  const k = 1 - Math.exp(-dt * 8);
+  const dx = tgt.cx - cam.cx, dy = tgt.cy - cam.cy, dz = tgt.z - cam.z;
+  if (Math.abs(dx) > 1e-4 || Math.abs(dy) > 1e-4 || Math.abs(dz) > 1e-4) {
+    cam.cx += dx * k; cam.cy += dy * k; cam.z += dz * k; dirty = true;
+  }
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- pointer interaction ---------- */
+const ptrs = new Map(); let moved = false, pinchD = 0, downAt = null;
+function subAt(px, py) {
+  for (const s of lastSubs) if (px >= s.clip.x && px <= s.clip.x + s.clip.w && py >= s.clip.y && py <= s.clip.y + s.clip.h) return s;
+  return lastSubs[0];
+}
+function zoomAt(px, py, f) {
+  const s = subAt(px, py), tf = s.tf; if (!tf) return;
+  const wx = cam.cx + (px - tf.cx0) / tf.sc, wy = cam.cy + (py - tf.cy0) / tf.sc;
+  const nz = clamp(cam.z * f, 0.8, 10), sc2 = tf.sc * nz / cam.z;
+  cam.cx = wx - (px - tf.cx0) / sc2; cam.cy = wy - (py - tf.cy0) / sc2; cam.z = nz;
+  tgt.cx = cam.cx; tgt.cy = cam.cy; tgt.z = nz; dirty = true;
+}
+cv.addEventListener('pointerdown', (e) => {
+  sugg.hidden = true; $('layers').hidden = true; $('layersBtn').setAttribute('aria-expanded', 'false');
+  cv.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY }); downAt = { x: e.offsetX, y: e.offsetY }; moved = false;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+cv.addEventListener('pointermove', (e) => {
+  const p = ptrs.get(e.pointerId); if (!p || nav.on) return;
+  if (ptrs.size === 1) {
+    const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
+    if (Math.hypot(e.offsetX - downAt.x, e.offsetY - downAt.y) > 5) moved = true;
+    if (moved) {
+      const s = subAt(e.offsetX, e.offsetY);
+      if (s && s.tf) { cam.cx -= dx / s.tf.sc; cam.cy -= dy / s.tf.sc; tgt.cx = cam.cx; tgt.cy = cam.cy; dirty = true; }
+    }
+    p.x = e.offsetX; p.y = e.offsetY;
+  } else if (ptrs.size === 2) {
+    p.x = e.offsetX; p.y = e.offsetY;
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchD > 0) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinchD);
+    pinchD = d; moved = true;
+  }
+});
+function endPtr(e) {
+  const had = ptrs.size === 1 && ptrs.has(e.pointerId);
+  ptrs.delete(e.pointerId); pinchD = 0;
+  if (had && !moved && !nav.on) mapClick(e.offsetX, e.offsetY);
+}
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); });
+cv.addEventListener('wheel', (e) => { e.preventDefault(); if (!nav.on) zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+function mapClick(px, py) {
+  const s = subAt(px, py); if (!s || !s.tf) return;
+  const wx = cam.cx + (px - s.tf.cx0) / s.tf.sc, wy = cam.cy + (py - s.tf.cy0) / s.tf.sc;
+  const n = nearestNodeWorld(wx, wy); if (n < 0) return;
+  setPoint(active, n, labelFor(n));
+  if (active === 'from') active = 'to';
+}
+
+/* ---------- controls ---------- */
+const chips = $('chips');
+Object.keys(CITIES).forEach((k) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.key = k;
+  b.textContent = CITIES[k].name; b.setAttribute('aria-pressed', 'false');
+  b.addEventListener('click', () => loadCity(k)); chips.appendChild(b);
+});
+const mathChip = document.createElement('button'); mathChip.type = 'button'; mathChip.className = 'chip math'; mathChip.textContent = 'The math';
+mathChip.addEventListener('click', () => $('math').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }));
+chips.appendChild(mathChip);
+
+document.querySelectorAll('.route').forEach((b) => b.addEventListener('click', () => {
+  sel = b.dataset.algo;
+  document.querySelectorAll('.route').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  renderSteps(); explain(); dirty = true;
+}));
+$('startbtn').addEventListener('click', startNav);
+$('pauseBtn').addEventListener('click', () => { paused = !paused; $('pauseBtn').textContent = paused ? 'Play' : 'Pause'; });
+$('stepBtn').addEventListener('click', () => { if (!running) return; paused = true; $('pauseBtn').textContent = 'Play'; stepReq = true; });
+$('navExit').addEventListener('click', () => exitNav(false));
+$('replay').addEventListener('click', () => startRace(true));
+$('compare').addEventListener('change', (e) => { split = e.target.checked; fitRoute(false); dirty = true; });
+$('locate').addEventListener('click', () => fitRoute(false));
+$('zin').addEventListener('click', () => { tgt.z = clamp(tgt.z * 1.6, 0.8, 10); });
+$('zout').addEventListener('click', () => { tgt.z = clamp(tgt.z / 1.6, 0.8, 10); });
+$('layersBtn').addEventListener('click', () => {
+  const l = $('layers'); l.hidden = !l.hidden; $('layersBtn').setAttribute('aria-expanded', String(!l.hidden));
+});
+document.querySelectorAll('[data-theme-set]').forEach((b) => b.addEventListener('click', () => {
+  document.documentElement.setAttribute('data-theme', b.dataset.themeSet);
+  document.querySelectorAll('[data-theme-set]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  dirty = true;
+}));
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.querySelectorAll('[data-theme-set]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.themeSet === 'dark')));
+}
+$('traffic').addEventListener('change', (e) => {
+  traffic = e.target.checked; tSeed++; setTraffic(G, traffic, tSeed); startRace(false);
+});
+window.addEventListener('resize', resizeCanvas);
+if (window.ResizeObserver) { new ResizeObserver(resizeCanvas).observe(app); new ResizeObserver(resizeCanvas).observe(panel); }
+new MutationObserver(() => { dirty = true; }).observe(document.documentElement, { attributes: true });
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { dirty = true; });
+
+/* ---------- benchmark table ---------- */
+function buildBench() {
+  const body = document.querySelector('#bench tbody'); if (!body) return;
+  Object.keys(CITIES).forEach((k) => {
+    const g = getCity(k); setTraffic(g, false, 0);
+    const s = nodeNearIn(g, PLACES[k][0].fx, PLACES[k][0].fy), t = nodeNearIn(g, PLACES[k][1].fx, PLACES[k][1].fy);
+    const d = new Runner(g, s, t, false), a = new Runner(g, s, t, true);
+    while (!d.done) d.step(); while (!a.done) a.step();
+    const same = Math.abs(d.cost - a.cost) < 1e-9, tr = document.createElement('tr');
+    [CITIES[k].name, g.count.toLocaleString(), d.expanded.toLocaleString(), a.expanded.toLocaleString(),
+     Math.round(100 * (1 - a.expanded / d.expanded)) + '%', d.cost.toFixed(1), same ? 'yes' : 'no']
+      .forEach((txt) => { const td = document.createElement('td'); td.textContent = txt; tr.appendChild(td); });
+    body.appendChild(tr);
+  });
+}
+
+resizeCanvas();
+buildBench();
+loadCity('cairo');
+requestAnimationFrame(frame);
+</script>
+
+</body></html>

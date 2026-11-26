@@ -1,0 +1,6 @@
+{
+  "name": "Route Race: GPS & Euler Explorer",
+  "description": "An interactive educational game teaching how GPS satellites, signal gaps, A* and Dijkstra shortest paths, and Euler's theorem in graph theory power modern navigation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
